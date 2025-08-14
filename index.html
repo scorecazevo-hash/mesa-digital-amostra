@@ -529,8 +529,10 @@
       const revenueToday = orders.filter(o => new Date(o.createdAt).toDateString() === new Date().toDateString()).reduce((s,o)=>s+o.total,0);
 
       function addItem(newItem) {
-        if (!newItem.name || !newItem.price) return;
-        const item = { id: uuid(), name: newItem.name, desc: newItem.desc||"", price: Number(newItem.price), category: newItem.category||"Other", available: true, modifiers: [] };
+        const price = Number(newItem.price);
+        // Permit price of 0 but guard against empty, non-numeric, or negative values
+        if (!newItem.name || newItem.price === "" || isNaN(price) || price < 0) return;
+        const item = { id: uuid(), name: newItem.name, desc: newItem.desc||"", price, category: newItem.category||"Other", available: true, modifiers: [] };
         setMenu([item, ...menu]);
       }
       function toggleAvailability(id) { setMenu(menu.map(m => m.id===id ? {...m, available: !m.available} : m)); }
