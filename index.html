@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mesa Digital Angola — Amostra Funcional</title>
+  <style>
+    :root {
+      --border: #e5e7eb;
+      --muted: #6b7280;
+      --fg: #111827;
+      --bg: #fafafa;
+      --accent: #111827;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", Arial, sans-serif;
+      color: var(--fg);
+      background: linear-gradient(#fafafa, #fff);
+    }
+    .container { max-width: 1100px; margin: 0 auto; padding: 16px; }
+    .topbar { position: sticky; top: 0; backdrop-filter: blur(6px); background: rgba(255,255,255,0.8); border-bottom: 1px solid var(--border); z-index: 10; }
+    .topbar-inner { display:flex; justify-content:space-between; align-items:center; padding: 10px 16px; max-width:1100px; margin:0 auto; }
+    .brand-dot { width: 32px; height: 32px; border-radius: 10px; background: black; color: white; display:grid; place-items:center; font-weight: 800; }
+    .muted { color: var(--muted); }
+    .tabs { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+    .tab { padding: 10px 12px; text-align: center; cursor: pointer; border-right: 1px solid var(--border); background: white; }
+    .tab:last-child { border-right: 0; }
+    .tab.active { background: black; color: white; font-weight: 600; }
+    .grid { display: grid; gap: 16px; }
+    @media(min-width: 900px) { .grid-3 { grid-template-columns: 2fr 1fr; } }
+    .card { border: 1px solid var(--border); border-radius: 16px; background: white; }
+    .card-h { padding: 14px 16px; border-bottom: 1px solid var(--border); font-weight: 600; display:flex; align-items:center; gap:8px; }
+    .card-c { padding: 14px 16px; }
+    .row { display:flex; gap: 8px; align-items:center; }
+    .row-between { display:flex; justify-content: space-between; align-items:center; gap: 8px; }
+    .btn { appearance:none; border: 1px solid var(--border); background:white; padding: 8px 10px; border-radius: 10px; cursor: pointer; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn.primary { background: black; color: white; border-color: black; }
+    .btn.ghost { background: transparent; }
+    .input, select, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; }
+    .badge { display:inline-block; border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; font-size: 12px; }
+    .pill { border:1px solid var(--border); padding: 4px 10px; border-radius:999px; font-size:12px; cursor:pointer; }
+    .pill.active { border-color: black; }
+    .item { display:flex; justify-content: space-between; align-items:flex-start; gap: 8px; border:1px solid var(--border); border-radius: 14px; padding: 8px; }
+    .list { display: grid; gap: 10px; }
+    .small { font-size: 12px; }
+    .title { font-weight: 600; }
+    .hr { border-top:1px solid var(--border); margin: 10px 0; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .hide { display: none; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="row">
+        <div class="brand-dot">M</div>
+        <div class="title">Mesa Digital Angola</div>
+      </div>
+      <div class="small muted">v0.6 — Amostra funcional</div>
+    </div>
+  </div>
+
+  <div class="container" id="root"></div>
+
+  <!-- React + ReactDOM + Babel (for demo) -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    const LS_KEYS = {
+      orders: "mesa.orders",
+      service: "mesa.servicePct",
+      menu: "mesa.menu",
+      company: "mesa.company",
+      nextSeq: "mesa.nextReceiptSeq",
+    };
+
+    const DEFAULT_SERVICE_PCT = 10;
+
+    const DEFAULT_MENU = [
+      { id: "g1", name: "Frango Grelhado", desc: "Meia dose no carvão", price: 3500, category: "Grill", available: true,
+        modifiers: [
+          { id: "spice", name: "Piri-piri", multiple: false, choices: [
+            { id: "mild", label: "Suave" }, { id: "med", label: "Médio" }, { id: "hot", label: "Picante" },
+          ]},
+          { id: "side", name: "Acompanhamento", multiple: true, choices: [
+            { id: "funge", label: "Funge" }, { id: "chips", label: "Batata Frita", priceDelta: 300 }, { id: "salad", label: "Salada" },
+          ]},
+        ]
+      },
+      { id: "d2", name: "Cuca", desc: "Garrafa 330ml", price: 1000, category: "Drinks", available: true },
+    ];
+
+    function load(key, fallback) {
+      try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch { return fallback; }
+    }
+    function save(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} }
+    function uuid() { return (crypto?.randomUUID?.() || Math.random().toString(36).slice(2)); }
+    function nowISO() { return new Date().toISOString(); }
+    function formatAOA(n) {
+      try { return new Intl.NumberFormat("pt-AO", {style:"currency",currency:"AOA", currencyDisplay: "code"}).format(n).replace("AOA", "Kz"); }
+      catch { return `Kz ${n.toFixed(0)}`; }
+    }
+    function csvEscape(s) {
+      s = String(s ?? "");
+      if (s.includes(",") || s.includes("\\n") || s.includes('"')) s = '"' + s.replaceAll('"', '""') + '"';
+      return s;
+    }
+    function parseTableFromUrl() {
+      const p = new URLSearchParams(window.location.search);
+      return p.get("table") || "--";
+    }
+    function nextReceiptNo(prefix, seq) {
+      return `${prefix}-${String(seq).padStart(4, "0")}`;
+    }
+    function isValidNIF(nif) { return /^\\d{9}$/.test((nif || "").trim()); }
+    function timestampForFilename() {
+      const d = new Date(); const pad = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+    }
+    function download(filename, mime, content) {
+      const blob = new Blob([content], {type:mime}); const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    }
+    function exportBackupJSON() {
+      const dump = {
+        version: "mesa-digital-amostra",
+        exportedAt: new Date().toISOString(),
+        data: {
+          [LS_KEYS.orders]: load(LS_KEYS.orders, []),
+          [LS_KEYS.service]: load(LS_KEYS.service, DEFAULT_SERVICE_PCT),
+          [LS_KEYS.menu]: load(LS_KEYS.menu, DEFAULT_MENU),
+          [LS_KEYS.company]: load(LS_KEYS.company, {}),
+          [LS_KEYS.nextSeq]: load(LS_KEYS.nextSeq, 1),
+        }
+      };
+      download(`backup_${timestampForFilename()}.json`,"application/json;charset=utf-8", JSON.stringify(dump, null, 2));
+    }
+    function restoreBackupJSON(json) {
+      if (!json || !json.data) throw new Error("Backup inválido");
+      Object.entries(json.data).forEach(([k,v]) => save(k,v));
+    }
+
+    function buildReceiptHTML(o, brand, company) {
+      const date = new Date(o.createdAt);
+      const isFinal = o.status === "Paid";
+      const title = isFinal ? "Recibo" : "Conta";
+      const lines = o.items.map(it => {
+        const entries = Object.entries(it.selections || {}).filter(([k,v]) => Array.isArray(v) ? v.length : !!v);
+        const sel = entries.map(([k,v]) => `${k}: ${Array.isArray(v) ? v.join("/") : v}`).join("; ");
+        return `<div style="display:flex;justify-content:space-between;margin:.25rem 0">
+          <div>
+            <div><strong>${it.qty}× ${it.name}</strong></div>
+            ${sel ? `<div style="font-size:11px;color:#555">${sel}</div>` : ""}
+            ${it.notes ? `<div style="font-size:11px;color:#555">Notas: ${it.notes}</div>` : ""}
+          </div>
+          <div>${formatAOA(it.basePrice * it.qty)}</div>
+        </div>`;
+      }).join("");
+      return `<!doctype html>
+      <html><head><meta charset="utf-8"/><title>${title} ${o.receiptNo ?? o.id}</title>
+      <style>
+        body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Noto Sans,Ubuntu,Cantarell; margin:16px;}
+        .box{max-width:380px;margin:0 auto;border:1px solid #ddd;border-radius:12px;padding:16px;}
+        .muted{color:#555;font-size:12px}.total{font-weight:700;font-size:16px}hr{border:none;border-top:1px solid #eee;margin:8px 0}
+      </style></head>
+      <body>
+        <div class="box">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              ${company.logoDataUrl ? `<img src="${company.logoDataUrl}" alt="logo" style="height:36px;object-fit:contain"/>` : `<div style="font-weight:700">${brand}</div>`}
+              <div class="muted">${company.name} • NIF ${company.nif}<br/>${company.address}</div>
+            </div>
+            <div class="muted">${title}</div>
+          </div>
+          <div class="muted">${o.receiptNo ? `Nº ${o.receiptNo} • ` : ""}Pedido: ${o.id.slice(0,6)} • Mesa ${o.table} • ${date.toLocaleString("pt-PT")}</div>
+          <hr/>${lines}<hr/>
+          <div style="display:flex;justify-content:space-between"><div>Subtotal</div><div>${formatAOA(o.subtotal)}</div></div>
+          <div style="display:flex;justify-content:space-between"><div>Serviço (${o.serviceChargePct}%)</div><div>${formatAOA(Math.round(o.subtotal*o.serviceChargePct/100))}</div></div>
+          <div style="display:flex;justify-content:space-between"><div>Gorjeta</div><div>${formatAOA(o.tipAmount)}</div></div>
+          <div style="display:flex;justify-content:space-between;margin-top:6px"><div class="total">Total</div><div class="total">${formatAOA(o.total)}</div></div>
+          ${o.paymentMethod ? `<div class="muted" style="margin-top:6px">Pagamento: ${o.paymentMethod}</div>` : ""}
+          <hr/><div class="muted">Obrigado pela preferência!</div>
+          ${company.receiptFooter ? `<div class="muted" style="margin-top:6px">${company.receiptFooter}</div>` : ``}
+        </div>
+        <script>window.onload=()=>window.print()</script>
+      </body></html>`;
+    }
+
+    function App() {
+      const [tab, setTab] = useState("customer");
+      const [orders, setOrders] = useState(load(LS_KEYS.orders, []));
+      const [servicePct, setServicePct] = useState(load(LS_KEYS.service, DEFAULT_SERVICE_PCT));
+      const [menu, setMenu] = useState(load(LS_KEYS.menu, DEFAULT_MENU));
+      const [brand, setBrand] = useState("Mesa Digital Angola");
+      const [company, setCompany] = useState(load(LS_KEYS.company, {
+        name: "Empresa Exemplo Lda.", nif: "999999999", address: "Rua Exemplo 123, Luanda", receiptPrefix: "MGA-2025",
+      }));
+      const [nextSeq, setNextSeq] = useState(load(LS_KEYS.nextSeq, 1));
+
+      useEffect(()=>save(LS_KEYS.orders, orders), [orders]);
+      useEffect(()=>save(LS_KEYS.service, servicePct), [servicePct]);
+      useEffect(()=>save(LS_KEYS.menu, menu), [menu]);
+      useEffect(()=>save(LS_KEYS.company, company), [company]);
+      useEffect(()=>save(LS_KEYS.nextSeq, nextSeq), [nextSeq]);
+
+      // Auto-roll year on load
+      useEffect(()=>{
+        const year = new Date().getFullYear();
+        const m = (company.receiptPrefix||"").match(/^(.*-)(\d{4})$/);
+        let newPrefix = company.receiptPrefix;
+        if (m) { if (m[2] !== String(year)) newPrefix = `${m[1]}${year}`; }
+        else { newPrefix = `${company.receiptPrefix || "MGA"}-${year}`; }
+        if (newPrefix !== company.receiptPrefix) { setCompany({...company, receiptPrefix: newPrefix}); setNextSeq(1); }
+        // eslint-disable-next-line
+      }, []);
+
+      const categories = useMemo(()=>Array.from(new Set(menu.map(m=>m.category))), [menu]);
+
+      function placeOrderFromCart({cart, table, tip}) {
+        const subtotal = cart.reduce((s,c)=>s+calcItemTotal(menu, c),0);
+        const svc = Math.round(subtotal*servicePct/100);
+        const total = subtotal + svc + tip;
+        const order = {
+          id: uuid(), table, items: cart, subtotal, serviceChargePct: servicePct, tipAmount: tip, total,
+          status: "Placed", createdAt: new Date().toISOString(),
+        };
+        setOrders([order, ...orders]);
+        alert("Pedido criado!");
+      }
+
+      function markPaid(o, method) {
+        let receiptNo = o.receiptNo;
+        if (!receiptNo) { receiptNo = nextReceiptNo(company.receiptPrefix || "MGA-2025", nextSeq); setNextSeq(nextSeq+1); }
+        updateOrder({...o, status:"Paid", paymentMethod: method, receiptNo});
+      }
+
+      function updateOrder(upd) { setOrders(prev => prev.map(o => o.id === upd.id ? upd : o)); }
+
+      return (
+        <div>
+          <div className="tabs" style={{marginBottom:12}}>
+            {["customer","kitchen","floor","admin"].map(t => (
+              <div key={t} className={"tab " + (tab===t?"active":"")} onClick={()=>setTab(t)}>
+                {({customer:"Customer QR", kitchen:"Kitchen", floor:"Floor", admin:"Admin"})[t]}
+              </div>
+            ))}
+          </div>
+
+          {tab==="customer" && <CustomerQR menu={menu} servicePct={servicePct} onPlaceOrder={placeOrderFromCart} />}
+          {tab==="kitchen" && <KitchenView orders={orders} onUpdate={updateOrder} />}
+          {tab==="floor" && <FloorView orders={orders} brand={brand} company={company} nextSeq={nextSeq} setNextSeq={setNextSeq} onUpdate={updateOrder} onPaid={markPaid} />}
+          {tab==="admin" && <AdminView brand={brand} setBrand={setBrand} menu={menu} setMenu={setMenu} servicePct={servicePct} setServicePct={setServicePct} orders={orders} company={company} setCompany={setCompany} nextSeq={nextSeq} setNextSeq={setNextSeq} />}
+        </div>
+      );
+    }
+
+    function CustomerQR({menu, servicePct, onPlaceOrder}) {
+      const categories = Array.from(new Set(menu.map(m=>m.category)));
+      const [activeCat, setActiveCat] = useState(categories[0] || "");
+      const [cart, setCart] = useState([]);
+      const [table, setTable] = useState(parseTableFromUrl());
+      const [tip, setTip] = useState(0);
+
+      const available = menu.filter(m => m.available && (!activeCat || m.category===activeCat));
+
+      function addToCart(item) {
+        const defaultSel = {};
+        (item.modifiers||[]).forEach(mod => { defaultSel[mod.id] = mod.multiple ? [] : (mod.choices?.[0]?.id ?? ""); });
+        setCart(prev => [{ id: uuid(), name: item.name, basePrice: item.price, qty: 1, selections: defaultSel }, ...prev]);
+      }
+      function updateQty(id, qty) { setCart(prev => prev.map(c => c.id===id ? {...c, qty: Math.max(1, qty)} : c)); }
+      function removeFromCart(id) { setCart(prev => prev.filter(c => c.id!==id)); }
+      function updateSelection(itemId, modId, choiceId, multiple) {
+        setCart(prev => prev.map(c => {
+          if (c.id !== itemId) return c;
+          const cur = c.selections[modId];
+          if (multiple) {
+            const arr = Array.isArray(cur) ? [...cur] : [];
+            const idx = arr.indexOf(choiceId);
+            if (idx>=0) arr.splice(idx,1); else arr.push(choiceId);
+            return { ...c, selections: { ...c.selections, [modId]: arr } };
+          } else {
+            return { ...c, selections: { ...c.selections, [modId]: choiceId } };
+          }
+        }));
+      }
+
+      const subtotal = cart.reduce((s,c)=>s+calcItemTotal(menu, c),0);
+      const svc = Math.round(subtotal*servicePct/100);
+      const total = subtotal + svc + tip;
+
+      function place() {
+        if (!table || table === "--") { alert("Define o nº da mesa primeiro."); return; }
+        if (cart.length===0) return;
+        onPlaceOrder({cart, table, tip});
+        setCart([]);
+      }
+
+      return (
+        <div className="grid grid-3">
+          <div className="card">
+            <div className="card-h">Menu</div>
+            <div className="card-c">
+              <div className="row" style={{marginBottom:8}}>
+                <select value={activeCat} onChange={(e)=>setActiveCat(e.target.value)} className="input" style={{maxWidth:220}}>
+                  {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="list">
+                {available.map(m => (
+                  <div key={m.id} className="item">
+                    <div>
+                      <div className="title">{m.name}</div>
+                      <div className="small muted">{m.desc || ""}</div>
+                      <div className="small" style={{marginTop:4, fontWeight:600}}>{formatAOA(m.price)}</div>
+                    </div>
+                    <button className="btn" onClick={()=>addToCart(m)}>Add</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="card">
+            <div className="card-h row-between">
+              <div className="title">Mesa {table || "--"}</div>
+              <div className="row small muted">
+                <span>Table</span>
+                <input className="input" style={{width:60}} value={table} onChange={(e)=>setTable(e.target.value)} />
+              </div>
+            </div>
+            <div className="card-c">
+              {cart.length===0 && <div className="small muted">Adicione pratos ao carrinho.</div>}
+              <div className="list">
+                {cart.map(c => (
+                  <div key={c.id} className="item">
+                    <div style={{flex:1}}>
+                      <div className="row-between">
+                        <div className="title">{c.name}</div>
+                        <div className="small" style={{fontWeight:600}}>{formatAOA(c.basePrice * c.qty)}</div>
+                      </div>
+                      {(getItemByName(menu, c.name)?.modifiers||[]).map(mod => (
+                        <div key={mod.id} className="small" style={{marginTop:6}}>
+                          <div className="title" style={{fontSize:12}}>{mod.name}</div>
+                          <div className="row" style={{flexWrap:"wrap"}}>
+                            {mod.choices.map(ch => {
+                              const multiple = mod.multiple;
+                              const selected = isChoiceSelected(c.selections[mod.id], ch.id);
+                              return (
+                                <div key={ch.id} className={"pill " + (selected?"active":"")} onClick={()=>updateSelection(c.id, mod.id, ch.id, multiple)}>
+                                  {ch.label}{ch.priceDelta ? ` (+${formatAOA(ch.priceDelta)})` : ""}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                      <div className="row-between small muted" style={{marginTop:8}}>
+                        <button className="btn" onClick={()=>removeFromCart(c.id)}>Remover</button>
+                        <div className="row">
+                          <button className="btn" onClick={()=>updateQty(c.id, c.qty-1)}>−</button>
+                          <div style={{width:28, textAlign:"center"}}>{c.qty}</div>
+                          <button className="btn" onClick={()=>updateQty(c.id, c.qty+1)}>+</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="hr"></div>
+              <div className="row-between small"><span>Subtotal</span><span>{formatAOA(subtotal)}</span></div>
+              <div className="row-between small"><span>Serviço ({servicePct}%)</span><span>{formatAOA(svc)}</span></div>
+              <div className="row-between small" style={{marginTop:6}}>
+                <span>Gorjeta</span>
+                <div className="row">
+                  {[0,200,500,1000].map(v => (
+                    <button key={v} className={"btn " + (v===0 ? "" : "")} onClick={()=>setTip(v)} disabled={tip===v}>
+                      {v===0 ? "Nenhuma" : `+${formatAOA(v)}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="row-between" style={{marginTop:8, fontWeight:700}}><span>Total</span><span>{formatAOA(total)}</span></div>
+              <button className="btn primary" style={{width:"100%", marginTop:10}} disabled={cart.length===0} onClick={place}>
+                Pagar com Multicaixa Express (simulado)
+              </button>
+              <div className="small muted" style={{marginTop:6}}>*Integração real do Multicaixa Express numa fase posterior.</div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function getItemByName(menu, name) { return menu.find(m => m.name===name); }
+    function isChoiceSelected(sel, id) { if (!sel) return false; return Array.isArray(sel) ? sel.includes(id) : sel===id; }
+    function calcItemTotal(menu, ci) {
+      const item = getItemByName(menu, ci.name);
+      const modsPrice = Object.entries(ci.selections || {}).reduce((sum,[modId, choice]) => {
+        const mod = (item?.modifiers||[]).find(m=>m.id===modId); if (!mod) return sum;
+        if (Array.isArray(choice)) return sum + choice.reduce((s, chId)=> s + (mod.choices.find(c=>c.id===chId)?.priceDelta || 0), 0);
+        return sum + (mod.choices.find(c=>c.id===choice)?.priceDelta || 0);
+      }, 0);
+      return (ci.basePrice + modsPrice) * ci.qty;
+    }
+
+    function KitchenView({orders, onUpdate}) {
+      const active = orders.filter(o=>["Placed","In Kitchen","Ready"].includes(o.status));
+      const grouped = groupBy(active, o=>o.status);
+      function bump(o) {
+        if (o.status==="Paid" || o.status==="Cancelled") return;
+        const next = { "Placed":"In Kitchen", "In Kitchen":"Ready", "Ready":"Served", "Served":"Paid", "Paid":"Paid", "Cancelled":"Cancelled" };
+        onUpdate({...o, status: next[o.status]});
+      }
+      return (
+        <div className="grid grid-3">
+          {["Placed","In Kitchen","Ready"].map(col => (
+            <div className="card" key={col}>
+              <div className="card-h">{col}</div>
+              <div className="card-c">
+                <div className="list">
+                  {(grouped[col]||[]).map(o => (
+                    <div key={o.id} className="item">
+                      <div style={{flex:1}}>
+                        <div className="row-between small">
+                          <div className="title">Mesa {o.table}</div>
+                          <span className="badge">{o.id.slice(0,6)}</span>
+                        </div>
+                        <ol className="small" style={{marginTop:6}}>
+                          {o.items.map((it,idx)=> <li key={idx}>{it.qty}× {it.name}</li>)}
+                        </ol>
+                        <div className="row-between small muted" style={{marginTop:8}}>
+                          <div>Total: <b>{formatAOA(o.total)}</b></div>
+                          <button className="btn" onClick={()=>bump(o)}>Avançar</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {(!grouped[col] || grouped[col].length===0) && <div className="small muted">Sem pedidos.</div>}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    function FloorView({orders, brand, company, nextSeq, setNextSeq, onUpdate, onPaid}) {
+      const byTable = groupBy(orders.filter(o => o.status!=="Cancelled"), o=>o.table);
+      const tables = Object.keys(byTable).sort();
+      const paymentOptions = [
+        { id: "Cash", label: "Dinheiro" }, { id: "POS", label: "Multicaixa POS" },
+        { id: "Express", label: "Multicaixa Express" }, { id: "Transfer", label: "Transferência" },
+      ];
+      function print(o) {
+        const html = buildReceiptHTML(o, brand, company);
+        const w = window.open("", "_blank", "width=420,height=640"); if (!w) return;
+        w.document.open(); w.document.write(html); w.document.close();
+      }
+      function csvRow(o, it) {
+        const sel = Object.entries(it.selections || {})
+          .filter(([k,v]) => Array.isArray(v) ? v.length : !!v)
+          .map(([k,v]) => `${k}: ${Array.isArray(v) ? v.join("/") : v}`).join("; ");
+        return [
+          o.id, o.receiptNo||"", o.table, new Date(o.createdAt).toISOString(), o.status, o.paymentMethod||"",
+          o.subtotal, o.serviceChargePct, o.tipAmount, o.total, it.name, it.qty, it.notes||"", sel
+        ];
+      }
+      function downloadOrderCSV(o) {
+        const header = ["order_id","receipt_no","table","created_at_iso","status","payment_method","subtotal","service_pct","tip","total","item","qty","notes","selections"];
+        const rows = o.items.map(it => csvRow(o,it));
+        const csv = [header, ...rows].map(r => r.map(csvEscape).join(",")).join("\n");
+        download(`pedido_${o.id.slice(0,6)}.csv`, "text/csv;charset=utf-8", csv);
+      }
+      function markPaidClick(o) {
+        onPaid(o, o.paymentMethod || "Cash");
+      }
+
+      return (
+        <div className="grid" style={{gridTemplateColumns:"1fr 1fr 1fr", gap: 16}}>
+          {tables.length===0 && <div className="small muted">Sem pedidos ainda.</div>}
+          {tables.map(t => (
+            <div className="card" key={t}>
+              <div className="card-h">Mesa {t}</div>
+              <div className="card-c">
+                <div className="list">
+                  {byTable[t].map(o => (
+                    <div key={o.id} className="item">
+                      <div style={{flex:1}}>
+                        <div className="row-between small">
+                          <span className="badge">{o.id.slice(0,6)}</span>
+                          <span className="badge">{o.status}</span>
+                        </div>
+                        <div className="small muted" style={{marginTop:4}}>{new Date(o.createdAt).toLocaleTimeString("pt-PT")}</div>
+                        <div className="row-between small" style={{marginTop:6}}><span>Total</span><span style={{fontWeight:700}}>{formatAOA(o.total)}</span></div>
+                        <div className="row small" style={{marginTop:6}}>
+                          <span>Método</span>
+                          <select className="input" disabled={o.status==="Paid"} value={o.paymentMethod || "Cash"} onChange={(e)=>onUpdate(o.status==="Paid" ? o : {...o, paymentMethod: e.target.value})} style={{maxWidth:200}}>
+                            {paymentOptions.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                          </select>
+                        </div>
+                        <div className="row" style={{flexWrap:"wrap", gap:8, marginTop:8}}>
+                          {o.status!=="Paid" && <button className="btn" onClick={()=>markPaidClick(o)}>Marcar como Pago</button>}
+                          {o.status!=="Cancelled" && o.status!=="Paid" && <button className="btn" onClick={()=>onUpdate({...o, status:"Cancelled"})}>Cancelar</button>}
+                          <button className="btn" onClick={()=>print({...o, paymentMethod: o.paymentMethod || ""})}>Imprimir {o.status==="Paid"?"recibo":"conta"}</button>
+                          <button className="btn" onClick={()=>downloadOrderCSV(o)}>CSV do pedido</button>
+                          {o.receiptNo && <span className="small muted">Nº recibo: {o.receiptNo}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    function AdminView({brand, setBrand, menu, setMenu, servicePct, setServicePct, orders, company, setCompany, nextSeq, setNextSeq}) {
+      const nifOk = isValidNIF(company.nif);
+      const revenueToday = orders.filter(o => new Date(o.createdAt).toDateString() === new Date().toDateString()).reduce((s,o)=>s+o.total,0);
+
+      function addItem(newItem) {
+        if (!newItem.name || !newItem.price) return;
+        const item = { id: uuid(), name: newItem.name, desc: newItem.desc||"", price: Number(newItem.price), category: newItem.category||"Other", available: true, modifiers: [] };
+        setMenu([item, ...menu]);
+      }
+      function toggleAvailability(id) { setMenu(menu.map(m => m.id===id ? {...m, available: !m.available} : m)); }
+      function removeItem(id) { setMenu(menu.filter(m => m.id!==id)); }
+
+      function exportOrdersCSVAll(list, filename) {
+        const header = ["order_id","receipt_no","table","created_at_iso","status","payment_method","subtotal","service_pct","tip","total","items"];
+        const rows = list.map(o => {
+          const items = o.items.map(it => {
+            const sel = Object.entries(it.selections || {}).filter(([k,v]) => Array.isArray(v) ? v.length : !!v).map(([k,v]) => `${k}: ${Array.isArray(v) ? v.join("/") : v}`).join("; ");
+            return `${it.qty}x ${it.name}${sel ? " ["+sel+"]" : ""}${it.notes ? " {"+it.notes+"}" : ""}`;
+          }).join(" | ");
+          return [o.id, o.receiptNo||"", o.table, new Date(o.createdAt).toISOString(), o.status, o.paymentMethod||"", o.subtotal, o.serviceChargePct, o.tipAmount, o.total, items];
+        });
+        const csv = [header, ...rows].map(r=>r.map(csvEscape).join(",")).join("\n");
+        download(filename, "text/csv;charset=utf-8", csv);
+      }
+
+      return (
+        <div className="grid" style={{gridTemplateColumns:"2fr 1fr", gap:16}}>
+          <div className="card">
+            <div className="card-h">Menu</div>
+            <div className="card-c">
+              <div className="list">
+                {menu.map(m => (
+                  <div key={m.id} className="item">
+                    <div>
+                      <div className="title">{m.name} {!m.available && <span className="badge">Indisponível</span>}</div>
+                      <div className="small muted">{m.category} • {m.desc || ""}</div>
+                      <div className="small" style={{fontWeight:600}}>{formatAOA(m.price)}</div>
+                    </div>
+                    <div className="row">
+                      <button className="btn" onClick={()=>toggleAvailability(m.id)}>{m.available ? "Desativar" : "Ativar"}</button>
+                      <button className="btn" onClick={()=>removeItem(m.id)}>Remover</button>
+                    </div>
+                  </div>
+                ))}
+                {menu.length===0 && <div className="small muted">Sem itens.</div>}
+              </div>
+              <div className="hr"></div>
+              <AddItemForm onAdd={addItem} />
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-h">Definições & Resumo</div>
+            <div className="card-c">
+              <div className="title small muted">Marca</div>
+              <input className="input" value={brand} onChange={(e)=>setBrand(e.target.value)} />
+              <div className="title small muted" style={{marginTop:8}}>Taxa de serviço (%)</div>
+              <input className="input" type="number" value={servicePct} onChange={(e)=>setServicePct(Number(e.target.value))} style={{maxWidth:120}}/>
+
+              <div className="hr"></div>
+              <div className="small muted">Receita hoje</div>
+              <div style={{fontWeight:800, fontSize:24}}>{formatAOA(revenueToday)}</div>
+              <div className="small muted" style={{marginTop:6}}>Pedidos ativos: {orders.filter(o=>["Placed","In Kitchen","Ready"].includes(o.status)).length}</div>
+              <div className="row" style={{gap:8, flexWrap:"wrap", marginTop:8}}>
+                <button className="btn" onClick={()=>exportOrdersCSVAll(orders, "pedidos_todos.csv")}>Exportar CSV (todos)</button>
+                <button className="btn" onClick={()=>exportOrdersCSVAll(orders.filter(o=>new Date(o.createdAt).toDateString()===new Date().toDateString()), "pedidos_hoje.csv")}>Exportar CSV (hoje)</button>
+                <button className="btn" onClick={()=>exportBackupJSON()}>Exportar Backup (JSON)</button>
+                <input id="restoreInput" type="file" accept="application/json" className="hide"
+                  onChange={(e)=>{
+                    const f=e.target.files?.[0]; if(!f) return;
+                    const r = new FileReader();
+                    r.onload = ()=>{
+                      try { const json = JSON.parse(String(r.result)); restoreBackupJSON(json); alert("Backup importado. A página vai recarregar."); window.location.reload(); }
+                      catch(err) { alert("Falha a importar backup: "+err.message); }
+                    };
+                    r.readAsText(f);
+                  }} />
+                <button className="btn" onClick={()=>document.getElementById("restoreInput").click()}>Importar Backup (JSON)</button>
+              </div>
+
+              <div className="hr"></div>
+              <div className="title">Dados da empresa</div>
+              <div className="grid2" style={{marginTop:8}}>
+                <div>
+                  <div className="small muted">Nome legal</div>
+                  <input className="input" value={company.name||""} onChange={(e)=>setCompany({...company, name:e.target.value})} />
+                </div>
+                <div>
+                  <div className="small muted">NIF</div>
+                  <input className={"input " + (isValidNIF(company.nif) ? "" : "warn")} value={company.nif||""} onChange={(e)=>setCompany({...company, nif:e.target.value})} />
+                  {!isValidNIF(company.nif) && <div className="small" style={{color:"#dc2626"}}>NIF deve ter 9 dígitos (apenas números).</div>}
+                </div>
+              </div>
+              <div className="grid2" style={{marginTop:8}}>
+                <div>
+                  <div className="small muted">Endereço</div>
+                  <input className="input" value={company.address||""} onChange={(e)=>setCompany({...company, address:e.target.value})} />
+                </div>
+                <div>
+                  <div className="small muted">Prefixo do recibo</div>
+                  <input className="input" value={company.receiptPrefix||""} onChange={(e)=>setCompany({...company, receiptPrefix:e.target.value})} />
+                  <div className="row-between small muted" style={{marginTop:6}}>
+                    <span>Próximo nº: {nextReceiptNo(company.receiptPrefix || "MGA-2025", Number(localStorage.getItem(LS_KEYS.nextSeq) || nextSeq))}</span>
+                    <button className="btn" onClick={()=>setNextSeq(1)}>Repor contagem</button>
+                  </div>
+                </div>
+              </div>
+              <div className="grid2" style={{marginTop:8}}>
+                <div>
+                  <div className="small muted">Logótipo (imagem)</div>
+                  <input type="file" accept="image/*" onChange={(e)=>{
+                    const f=e.target.files?.[0]; if(!f) return;
+                    const r = new FileReader(); r.onload = ()=>setCompany({...company, logoDataUrl:String(r.result)}); r.readAsDataURL(f);
+                  }} />
+                  {company.logoDataUrl && <div className="row" style={{marginTop:6}}><img src={company.logoDataUrl} style={{height:40, border:"1px solid #ddd", borderRadius:6}}/><button className="btn" onClick={()=>setCompany({...company, logoDataUrl: undefined})}>Remover</button></div>}
+                </div>
+                <div>
+                  <div className="small muted">Rodapé do recibo</div>
+                  <textarea className="input" rows="3" value={company.receiptFooter||""} onChange={(e)=>setCompany({...company, receiptFooter:e.target.value})}></textarea>
+                </div>
+              </div>
+
+              <div className="hr"></div>
+              <div className="title">QR Links</div>
+              <div className="row" style={{gap:8, flexWrap:"wrap", marginTop:8}}>
+                {["1","2","10","12"].map(t => <a key={t} className="pill" href={`?table=${t}`}>Abrir ?table={t}</a>)}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function AddItemForm({onAdd}) {
+      const [name, setName] = useState("");
+      const [desc, setDesc] = useState("");
+      const [category, setCategory] = useState("Grill");
+      const [price, setPrice] = useState("");
+      function submit() {
+        onAdd({ name, desc, category, price });
+        setName(""); setDesc(""); setPrice("");
+      }
+      return (
+        <div>
+          <div className="title" style={{marginBottom:8}}>Adicionar item</div>
+          <div className="grid2">
+            <div><div className="small muted">Nome</div><input className="input" value={name} onChange={(e)=>setName(e.target.value)} /></div>
+            <div><div className="small muted">Categoria</div>
+              <select className="input" value={category} onChange={(e)=>setCategory(e.target.value)}>
+                {["Grill","Sides","Drinks","Other"].map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{marginTop:8}}><div className="small muted">Descrição</div><input className="input" value={desc} onChange={(e)=>setDesc(e.target.value)} /></div>
+          <div style={{marginTop:8, maxWidth:160}}><div className="small muted">Preço (AOA)</div><input className="input" type="number" value={price} onChange={(e)=>setPrice(e.target.value)} /></div>
+          <button className="btn" style={{marginTop:8}} onClick={submit}>Adicionar</button>
+        </div>
+      );
+    }
+
+    function groupBy(arr, keyFn) {
+      return arr.reduce((acc,cur)=>{ const k = keyFn(cur); (acc[k] ||= []).push(cur); return acc; }, {});
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
